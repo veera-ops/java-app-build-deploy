@@ -1,5 +1,7 @@
+package com.example;
+
 public class App {
     public static void main(String[] args) {
-        System.out.println("Hello from sample Java app!");
+        System.out.println("Hello from Java ECR Demo!");
     }
 }
