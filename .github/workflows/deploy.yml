@@ -9,7 +9,6 @@ on:
 
 env:
   AWS_REGION: us-east-2
-  ECR_REPO_NAME: spinco-dev
 
 jobs:
   build-and-deploy:
@@ -38,16 +37,31 @@ jobs:
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set branch-specific ECR repo name
+        id: ecr_repo
+        run: |
+          BRANCH_NAME="${GITHUB_REF##*/}"
+          if [ "$BRANCH_NAME" = "dev" ]; then
+            echo "ECR_REPO_NAME=spinco-dev" >> $GITHUB_ENV
+          elif [ "$BRANCH_NAME" = "qa" ]; then
+            echo "ECR_REPO_NAME=spinco-qa" >> $GITHUB_ENV
+          elif [ "$BRANCH_NAME" = "master" ]; then
+            echo "ECR_REPO_NAME=spinco-master" >> $GITHUB_ENV
+          else
+            echo "Unsupported branch: $BRANCH_NAME"
+            exit 1
+          fi
+
       - name: Build Docker image
         run: |
-          IMAGE_TAG=${{ github.ref_name }}
-          docker build -t ${{ env.ECR_REPO_NAME }}:$IMAGE_TAG .
+          IMAGE_TAG=${GITHUB_REF##*/}
+          docker build -t $ECR_REPO_NAME:$IMAGE_TAG .
 
       - name: Tag and push image to ECR
         run: |
-          IMAGE_TAG=${{ github.ref_name }}
+          IMAGE_TAG=${GITHUB_REF##*/}
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ECR_URI=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}
+          ECR_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME
           
-          docker tag ${{ env.ECR_REPO_NAME }}:$IMAGE_TAG $ECR_URI:$IMAGE_TAG
+          docker tag $ECR_REPO_NAME:$IMAGE_TAG $ECR_URI:$IMAGE_TAG
           docker push $ECR_URI:$IMAGE_TAG
