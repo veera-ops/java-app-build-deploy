@@ -1,0 +1,53 @@
+name: Build, Test, and Deploy to ECR
+
+on:
+  push:
+    branches:
+      - dev
+      - qa
+      - master
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REPO_NAME: spinco-dev
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build with Maven
+        run: mvn clean package
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          IMAGE_TAG=${{ github.ref_name }}
+          docker build -t ${{ env.ECR_REPO_NAME }}:$IMAGE_TAG .
+
+      - name: Tag and push image to ECR
+        run: |
+          IMAGE_TAG=${{ github.ref_name }}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_URI=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}
+          
+          docker tag ${{ env.ECR_REPO_NAME }}:$IMAGE_TAG $ECR_URI:$IMAGE_TAG
+          docker push $ECR_URI:$IMAGE_TAG
